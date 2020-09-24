@@ -4,9 +4,7 @@ output: github_document
 always_allow_html: true
 ---
 
-```{r setup}
-knitr::opts_chunk$set(eval = FALSE, include  = FALSE)
-```
+
 
 # Learning goals
 
@@ -36,9 +34,7 @@ This markdown document should be rendered using `github_document` document.
 You should load in `dplyr`, (or `data.table` if you want to work that way), `ggplot2` and `tidytext`.
 If you don't already have `tidytext` then you can install with
 
-```{r}
-install.packages("tidytext")
-```
+
 
 ### read in Medical Transcriptions
 
