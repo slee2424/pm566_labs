@@ -35,7 +35,6 @@ You should load in `dplyr`, (or `data.table` if you want to work that way), `ggp
 If you don't already have `tidytext` then you can install with
 
 
-
 ### read in Medical Transcriptions
 
 Loading in reference transcription samples from https://www.mtsamples.com/
