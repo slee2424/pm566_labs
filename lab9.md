@@ -18,8 +18,8 @@ three examples of problems that you believe may be solved using parallel
 computing, and check for packages on the HPC CRAN task view that may be
 related to it.
 
-  - Cross-validation in Machine Learning: can use packages in’‘.
-    ’carat’, ‘mlr’.
+  - Cross-validation in Machine Learning: can use packages like ‘carat’,
+    ‘mlr’.
   - Bootstrapping: ‘boot’
   - Monte Carlo Simulation: ‘parallel’
   - Agent Based Modeling: ‘parallel’
@@ -31,6 +31,7 @@ using parallel:
 
 ``` r
 library(microbenchmark)
+library(parallel)
 ```
 
 1.  This function generates a `n x k` dataset with all its entries
@@ -56,9 +57,9 @@ microbenchmark::microbenchmark(
 ```
 
     ## Unit: microseconds
-    ##       expr     min       lq    mean   median      uq       max neval
-    ##     fun1() 540.301 653.5515 867.853 737.1510 982.901  6332.701   100
-    ##  fun1alt()  27.701  32.5510 255.524  39.2505  52.701 21191.701   100
+    ##       expr   min     lq    mean median     uq     max neval
+    ##     fun1() 408.7 590.95 917.967 665.45 765.60 23443.0   100
+    ##  fun1alt()  26.4  28.00  78.887  30.85  36.95  4404.3   100
 
 ``` r
 microbenchmark::microbenchmark(
@@ -68,9 +69,9 @@ microbenchmark::microbenchmark(
 ```
 
     ## Unit: relative
-    ##       expr      min       lq     mean   median       uq     max neval
-    ##     fun1() 16.11944 15.77642 15.61814 15.73121 15.00253 18.0174   100
-    ##  fun1alt()  1.00000  1.00000  1.00000  1.00000  1.00000  1.0000   100
+    ##       expr      min       lq     mean   median       uq      max neval
+    ##     fun1() 16.23077 16.01509 15.07435 15.46914 15.11022 14.02408   100
+    ##  fun1alt()  1.00000  1.00000  1.00000  1.00000  1.00000  1.00000   100
 
 2.  Find the column max (hint: Checkout the function `max.col()`).
 
@@ -80,19 +81,25 @@ microbenchmark::microbenchmark(
 # Data Generating Process (10 x 10,000 matrix)
 set.seed(1234)
 x <- matrix(rnorm(1e4), nrow=10)
+
 # Find each column's max value
 fun2 <- function(x) {
   apply(x, 2, max)
 }
 fun2alt <- function(x) {
-  # YOUR CODE HERE
+  x[cbind(max.col(t(x)), 1:ncol(x))]
 }
 # Benchmarking
 microbenchmark::microbenchmark(
-  fun2(),
-  fun2alt()
+  fun2(x),
+  fun2alt(x), unit = "relative"
 )
 ```
+
+    ## Unit: relative
+    ##        expr      min       lq     mean   median       uq      max neval
+    ##     fun2(x) 10.27303 9.555951 6.793828 8.897397 8.873797 1.176212   100
+    ##  fun2alt(x)  1.00000 1.000000 1.000000 1.000000 1.000000 1.000000   100
 
 ## Problem 3: Parallelize everyhing
 
@@ -116,11 +123,16 @@ my_boot <- function(dat, stat, R, ncpus = 1L) {
   idx <- matrix(sample.int(n, n*R, TRUE), nrow=n, ncol=R)
  
   # Making the cluster using `ncpus`
-  # STEP 1: GOES HERE
-  # STEP 2: GOES HERE
+  # STEP 1: Make Cluster
+  cl <- makePSOCKcluster(ncpus) 
   
-    # STEP 3: THIS FUNCTION NEEDS TO BE REPLACES WITH parLapply
-  ans <- lapply(seq_len(R), function(i) {
+  # STEP 2: Set it up (export data if needed), idx, dat
+  clusterExport(cl, varlist = c("idx", "dat", "stat"), envir = environment())
+  # clusterSetRNGstream(cl, 12312)
+  # clusterEvalQ(cl, library(ggplot2))
+  
+  # STEP 3: THIS FUNCTION NEEDS TO BE REPLACES WITH parLapply
+  ans <- parLapply(cl, seq_len(R), function(i) {
     stat(dat[idx[,i], , drop=FALSE])
   })
   
@@ -128,6 +140,7 @@ my_boot <- function(dat, stat, R, ncpus = 1L) {
   ans <- do.call(rbind, ans)
   
   # STEP 4: GOES HERE
+  stopCluster(cl)
   
   ans
   
@@ -142,19 +155,39 @@ my_boot <- function(dat, stat, R, ncpus = 1L) {
 ``` r
 # Bootstrap of an OLS
 my_stat <- function(d) coef(lm(y ~ x, data=d))
+
 # DATA SIM
 set.seed(1)
-n <- 500; R <- 1e4
-x <- cbind(rnorm(n)); y <- x*5 + rnorm(n)
+n <- 500 
+R <- 1e4
+
+x <- cbind(rnorm(n))
+y <- x*5 + rnorm(n)
+
 # Checking if we get something similar as lm
 ans0 <- confint(lm(y~x))
-ans1 <- my_boot(dat = data.frame(x, y), mi_stat, R = R, ncpus = 2L)
+ans1 <- my_boot(dat = data.frame(x, y), my_stat, R = R, ncpus = 2L)
+
 # You should get something like this
 t(apply(ans1, 2, quantile, c(.025,.975)))
+```
+
+    ##                   2.5%      97.5%
+    ## (Intercept) -0.1386903 0.04856752
+    ## x            4.8685162 5.04351239
+
+``` r
 ##                   2.5%      97.5%
 ## (Intercept) -0.1372435 0.05074397
 ## x            4.8680977 5.04539763
 ans0
+```
+
+    ##                  2.5 %     97.5 %
+    ## (Intercept) -0.1379033 0.04797344
+    ## x            4.8650100 5.04883353
+
+``` r
 ##                  2.5 %     97.5 %
 ## (Intercept) -0.1379033 0.04797344
 ## x            4.8650100 5.04883353
@@ -167,9 +200,18 @@ version:
 <!-- end list -->
 
 ``` r
-system.time(my_boot(dat = data.frame(x, y), mi_stat, R = 4000, ncpus = 1L))
-system.time(my_boot(dat = data.frame(x, y), mi_stat, R = 4000, ncpus = 2L))
+system.time(my_boot(dat = data.frame(x, y), my_stat, R = 4000, ncpus = 1L))
 ```
+
+    ##    user  system elapsed 
+    ##    0.14    0.11    7.21
+
+``` r
+system.time(my_boot(dat = data.frame(x, y), my_stat, R = 4000, ncpus = 2L))
+```
+
+    ##    user  system elapsed 
+    ##    0.17    0.22    4.32
 
 ## Problem 4: Compile this markdown document using Rscript
 
